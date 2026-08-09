@@ -13,11 +13,15 @@ The other plugins in this space sweep the whole vault and strip everything that 
 
 This plugin only ever touches links pointing at the file you just deleted, and only after confirming that the link no longer resolves to anything else. A link to a note you never created is never touched.
 
-## What it does
+## Two ways to use it
 
-When a file is deleted, the plugin finds every reference to it and rewrites each one in place. Deleting a folder covers the files inside it, and deleting several files at once is handled as a single pass.
+**Delete first, clean up after.** Delete a file however you normally do. The plugin finds every reference to it and rewrites each one. Deleting a folder covers the files inside it, and deleting several files at once is handled as a single pass.
 
-By default it shows you what it is about to do first:
+**Confirm before anything is deleted.** Use **Delete and clean up links** from a file's right-click menu, or the command *Delete current file and clean up links to it*. You see what points at the file, decide what happens to those links, and only then is the file deleted. Dismiss the dialog and nothing happens at all, neither the delete nor the edits.
+
+The second path exists because Obsidian's own delete cannot be intercepted: `vault.on("delete")` fires once the file is already gone, and there is no cancellable pre-delete hook. So rather than pretend, the plugin offers a delete it owns end to end. It also ranks replacement notes better, since the file's own tags and links are still there to compare against instead of a best-effort copy of them.
+
+Either way, it shows you what it is about to do first:
 
 ```
 "Old Paper Note" deleted

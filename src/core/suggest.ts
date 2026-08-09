@@ -38,7 +38,7 @@ export interface RankingContext {
 }
 
 /** How many suggestions to put in front of the user before they start typing. */
-const MAX_SUGGESTIONS = 30;
+const MAX_SUGGESTIONS = 50;
 
 /**
  * A tag carried by nearly every note of a folder is implied by the folder, so
@@ -140,7 +140,7 @@ export function scoreCandidate(
 		reasons.push("same name in another folder");
 	} else {
 		const similarity = tokenSimilarity(candidate.basename, deleted.basename);
-		if (similarity > 0.3) {
+		if (similarity > 0.25) {
 			score += Math.round(50 * similarity);
 			reasons.push("similar name");
 		}
@@ -246,26 +246,47 @@ function describeTags(tags: string[]): string {
 	return extra > 0 ? `${shown} and ${extra} more` : shown;
 }
 
-/** Jaccard overlap of the word sets of two note names. */
+/**
+ * How alike two note names are, from 0 to 1.
+ *
+ * Deliberately not Jaccard over the two word sets. Long titles share a lot of
+ * incidental words, so dividing by the union buries a real match: the pair
+ * "Amazon's Next Warehouse Automation Target ..." and "Amazon's next warehouse
+ * efficiency drive ..." shares four meaningful words and still scores 0.19.
+ * Dividing by the shorter name instead keeps a long title comparable to a short
+ * one, and matching words at the *start* count extra, since that is where
+ * titles about the same thing agree.
+ */
 export function tokenSimilarity(a: string, b: string): number {
-	const left = tokenize(a);
-	const right = tokenize(b);
-	if (left.size === 0 || right.size === 0) return 0;
+	const left = tokenList(a);
+	const right = tokenList(b);
+	const leftSet = new Set(left);
+	const rightSet = new Set(right);
+	if (leftSet.size === 0 || rightSet.size === 0) return 0;
 
 	let shared = 0;
-	for (const token of left) if (right.has(token)) shared += 1;
-	const union = left.size + right.size - shared;
-	return union === 0 ? 0 : shared / union;
+	for (const token of leftSet) if (rightSet.has(token)) shared += 1;
+	if (shared === 0) return 0;
+
+	const shorter = Math.min(leftSet.size, rightSet.size);
+	// One word in common is weak evidence unless a name is essentially that word.
+	const weight = shared === 1 && shorter > 1 ? 0.5 : 1;
+
+	let run = 0;
+	while (run < left.length && run < right.length && left[run] === right[run]) run += 1;
+
+	return Math.min(1, (weight * shared) / shorter + Math.min(0.3, run * 0.1));
 }
 
-function tokenize(name: string): Set<string> {
-	return new Set(
+/** The meaningful words of a name, in order. */
+function tokenList(name: string): string[] {
+	return (
 		name
 			.toLowerCase()
 			.split(/[^a-z0-9]+/)
 			// Pure numbers make dated note names look alike: "2026-07-29 Scan"
 			// would otherwise match the daily note "2026-07-29".
-			.filter((token) => token.length > 1 && !/^\d+$/.test(token)),
+			.filter((token) => token.length > 1 && !/^\d+$/.test(token))
 	);
 }
 

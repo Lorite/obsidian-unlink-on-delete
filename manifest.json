@@ -1,8 +1,8 @@
 {
 	"id": "unlink-on-delete",
 	"name": "Unlink on Delete",
-	"version": "1.0.0",
-	"minAppVersion": "1.5.8",
+	"version": "1.0.1",
+	"minAppVersion": "1.6.6",
 	"description": "When you delete a file, clean up the links that pointed to it instead of leaving them broken.",
 	"author": "Lorite",
 	"authorUrl": "https://github.com/Lorite",

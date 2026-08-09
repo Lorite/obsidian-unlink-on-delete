@@ -4,8 +4,10 @@ import type { RepointChoices, RewriteResult } from "./types";
 import { DEFAULT_SETTINGS, UnlinkOnDeleteSettings } from "./settings";
 import { findReferences } from "./core/scan";
 import { rewriteReferences } from "./core/rewrite";
+import { deleteWithCleanup } from "./core/delete-with-cleanup";
 import { ConfirmCleanupModal } from "./ui/confirm-modal";
 import { UnlinkOnDeleteSettingTab } from "./ui/settings-tab";
+import { announce } from "./ui/notice";
 
 /**
  * Deletions arrive one file at a time. Waiting a moment lets a multi-file delete
@@ -19,6 +21,8 @@ export default class UnlinkOnDeletePlugin extends Plugin {
 	private queue = new Map<string, TFile>();
 	/** Last known metadata of deleted files, keyed by path. */
 	private caches = new Map<string, CachedMetadata | null>();
+	/** Files this plugin deleted itself, already handled before they went. */
+	private handled = new Set<string>();
 	private running = false;
 
 	private flush = debounce(() => void this.processQueue(), BATCH_DELAY_MS, true);
@@ -26,6 +30,7 @@ export default class UnlinkOnDeletePlugin extends Plugin {
 	async onload(): Promise<void> {
 		await this.loadSettings();
 		this.addSettingTab(new UnlinkOnDeleteSettingTab(this.app, this));
+		this.registerDeleteCommand();
 
 		// Registered inside onLayoutReady so the initial vault index does not look
 		// like a burst of deletions on startup.
@@ -42,6 +47,44 @@ export default class UnlinkOnDeletePlugin extends Plugin {
 		});
 	}
 
+	/**
+	 * A delete this plugin owns end to end, so the file is still there to keep if
+	 * the dialog is dismissed. Obsidian's own delete cannot be intercepted.
+	 */
+	private registerDeleteCommand(): void {
+		this.addCommand({
+			id: "delete-file-and-clean-up-links",
+			name: "Delete current file and clean up links to it",
+			checkCallback: (checking: boolean) => {
+				const file = this.app.workspace.getActiveFile();
+				if (!file) return false;
+				if (!checking) void this.deleteWithCleanup(file);
+				return true;
+			},
+		});
+
+		this.registerEvent(
+			this.app.workspace.on("file-menu", (menu, file) => {
+				if (!(file instanceof TFile)) return;
+				menu.addItem((item) =>
+					item
+						.setTitle("Delete and clean up links")
+						.setIcon("trash-2")
+						.onClick(() => void this.deleteWithCleanup(file)),
+				);
+			}),
+		);
+	}
+
+	private async deleteWithCleanup(file: TFile): Promise<void> {
+		try {
+			await deleteWithCleanup(this.app, file, this.settings, (path) => this.handled.add(path));
+		} catch (error) {
+			console.error("Unlink on delete: delete failed", error);
+			new Notice("Unlink on delete: delete failed, see the developer console.");
+		}
+	}
+
 	async loadSettings(): Promise<void> {
 		const stored = (await this.loadData()) as Partial<UnlinkOnDeleteSettings> | null;
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, stored ?? {});
@@ -55,6 +98,8 @@ export default class UnlinkOnDeletePlugin extends Plugin {
 		if (!this.settings.enabled) return;
 
 		for (const deleted of collectFiles(file)) {
+			// Already dealt with by the plugin's own delete command.
+			if (this.handled.delete(deleted.path)) continue;
 			this.queue.set(deleted.path, deleted);
 		}
 		if (this.queue.size > 0) this.flush();
@@ -101,19 +146,4 @@ function collectFiles(file: TAbstractFile): TFile[] {
 	if (file instanceof TFile) return [file];
 	if (file instanceof TFolder) return file.children.flatMap(collectFiles);
 	return [];
-}
-
-function announce(result: RewriteResult): void {
-	const { notesChanged, referencesRewritten, referencesSkipped, referencesRepointed } = result;
-	if (referencesRewritten === 0 && referencesSkipped === 0) return;
-
-	const cleaned = referencesRewritten - referencesRepointed;
-	const parts: string[] = [];
-	if (cleaned > 0) parts.push(`cleaned ${cleaned} ${cleaned === 1 ? "link" : "links"}`);
-	if (referencesRepointed > 0) parts.push(`repointed ${referencesRepointed}`);
-	if (parts.length === 0) parts.push("changed nothing");
-
-	const where = `${notesChanged} ${notesChanged === 1 ? "note" : "notes"}`;
-	const tail = referencesSkipped > 0 ? `, ${referencesSkipped} left alone` : "";
-	new Notice(`Unlink on delete: ${parts.join(", ")} in ${where}${tail}.`);
 }

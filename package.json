@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-unlink-on-delete",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Obsidian plugin that cleans up the links pointing at a file when you delete it.",
 	"main": "main.js",
 	"type": "module",

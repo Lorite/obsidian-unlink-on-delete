@@ -25,6 +25,8 @@ export class ConfirmCleanupModal extends Modal {
 		private notes: ReferencingNote[],
 		private settings: UnlinkOnDeleteSettings,
 		private caches: Map<string, CachedMetadata | null>,
+		/** True when the file is still on disk and this dialog decides its fate. */
+		private pendingDelete = false,
 	) {
 		super(app);
 	}
@@ -38,7 +40,8 @@ export class ConfirmCleanupModal extends Modal {
 
 	onOpen(): void {
 		const only = this.deleted.length === 1 ? this.deleted[0] : undefined;
-		this.setTitle(only ? `"${only.basename}" deleted` : `${this.deleted.length} files deleted`);
+		const what = only ? `"${only.basename}"` : `${this.deleted.length} files`;
+		this.setTitle(this.pendingDelete ? `Delete ${what}?` : `${what} deleted`);
 		this.render();
 	}
 
@@ -47,12 +50,15 @@ export class ConfirmCleanupModal extends Modal {
 		contentEl.empty();
 
 		const total = this.notes.reduce((sum, note) => sum + note.references.length, 0);
+		const where = `${countLabel(total, "link", "links")} in ${countLabel(
+			this.notes.length,
+			"note",
+			"notes",
+		)}`;
 		contentEl.createEl("p", {
-			text: `${countLabel(total, "link", "links")} in ${countLabel(
-				this.notes.length,
-				"note",
-				"notes",
-			)} now point nowhere:`,
+			text: this.pendingDelete
+				? `${where} point at it:`
+				: `${where} now point nowhere:`,
 		});
 
 		const list = contentEl.createEl("ul", { cls: "unlink-on-delete-list" });
@@ -80,7 +86,9 @@ export class ConfirmCleanupModal extends Modal {
 				this.confirmed = true;
 				this.close();
 			});
-		new ButtonComponent(buttons).setButtonText("Leave them").onClick(() => this.close());
+		new ButtonComponent(buttons)
+			.setButtonText(this.pendingDelete ? "Cancel" : "Leave them")
+			.onClick(() => this.close());
 	}
 
 	private renderRepointRows(contentEl: HTMLElement): void {
@@ -116,12 +124,15 @@ export class ConfirmCleanupModal extends Modal {
 	}
 
 	private confirmLabel(): string {
+		if (this.pendingDelete) return "Delete and clean up";
 		if (this.repoints.size > 0) return "Apply";
 		return this.settings.mode === "strike" ? "Strike them through" : "Unlink them";
 	}
 
 	private hintText(): string {
-		const tail = " This edits your notes and cannot be undone with Ctrl+Z.";
+		const tail = this.pendingDelete
+			? " Nothing is deleted or edited unless you confirm, and the edits cannot be undone with Ctrl+Z."
+			: " This edits your notes and cannot be undone with Ctrl+Z.";
 		if (this.repoints.size > 0) {
 			return `Links to the notes above are repointed, the rest are cleaned up.${tail}`;
 		}
