@@ -1,4 +1,5 @@
 import { App, ButtonComponent, Modal, Setting, TFile } from "obsidian";
+import type { CachedMetadata } from "obsidian";
 import type { CleanupDecision, ReferencingNote, RepointChoices } from "../types";
 import { UnlinkOnDeleteSettings } from "../settings";
 import { suggestReplacements } from "../core/suggest";
@@ -23,6 +24,7 @@ export class ConfirmCleanupModal extends Modal {
 		private deleted: TFile[],
 		private notes: ReferencingNote[],
 		private settings: UnlinkOnDeleteSettings,
+		private caches: Map<string, CachedMetadata | null>,
 	) {
 		super(app);
 	}
@@ -92,7 +94,7 @@ export class ConfirmCleanupModal extends Modal {
 
 			setting.addButton((button) =>
 				button.setButtonText(chosen ? "Change…" : "Repoint to…").onClick(() => {
-					new NotePickerModal(this.app, file.basename, suggestReplacements(this.app, file), (picked) => {
+					new NotePickerModal(this.app, file.basename, suggestReplacements(this.app, file, this.caches.get(file.path) ?? null), (picked) => {
 						this.repoints.set(file.path, picked);
 						this.render();
 					}).open();

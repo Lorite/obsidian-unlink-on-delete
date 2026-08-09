@@ -49,9 +49,19 @@ Candidates are suggested and ranked, with the reason shown next to each:
 | --- | --- |
 | Lists the deleted name as an alias | Obsidian writes alias links as `[[Real Name\|alias]]`, so a note claiming the old name usually absorbed it |
 | Same name in another folder | The note was moved, and Obsidian did not see it as a rename |
-| Similar name, same folder | Weak on its own, useful as a shortlist |
+| Similar name | Word overlap, ignoring numbers so dated note names do not all look alike |
+| Shares tags | Weighted by how rare each tag is, see below |
+| The deleted note linked to it | A note merged into another usually pointed at it first |
+| Same folder | Weak on its own, never enough to suggest a note by itself |
 
-The whole vault stays searchable, so a bad suggestion never boxes you in.
+Tags are read from the deleted note's own metadata, which Obsidian hands back when the file goes.
+
+**Not every shared tag counts.** Two rules keep tag matching meaningful in a real vault:
+
+- A tag on more than 5% of your notes is a filing convention, not a statement about one note, so it is ignored. Without this, a vault where everything is tagged `#work` suggests everything.
+- A tag carried by nearly every note of a folder is implied by that folder, so it is ignored between two notes that already share it. This is what stops vaults that mirror their folder tree into tags from scoring every sibling note identically.
+
+Rarer tags are worth more than common ones, so one specific shared tag outweighs three generic ones. The whole vault stays searchable, so a bad suggestion never boxes you in.
 
 **Suggestions are never applied on their own.** That is deliberate: a broken link is loud and stays visible until you fix it, while a link silently repointed at the wrong note looks correct forever. Ranking is only ever used to order a list a person chooses from.
 

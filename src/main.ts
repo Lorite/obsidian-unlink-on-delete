@@ -1,4 +1,5 @@
 import { Notice, Plugin, TAbstractFile, TFile, TFolder, debounce } from "obsidian";
+import type { CachedMetadata } from "obsidian";
 import type { RepointChoices, RewriteResult } from "./types";
 import { DEFAULT_SETTINGS, UnlinkOnDeleteSettings } from "./settings";
 import { findReferences } from "./core/scan";
@@ -16,6 +17,8 @@ export default class UnlinkOnDeletePlugin extends Plugin {
 	settings: UnlinkOnDeleteSettings = DEFAULT_SETTINGS;
 
 	private queue = new Map<string, TFile>();
+	/** Last known metadata of deleted files, keyed by path. */
+	private caches = new Map<string, CachedMetadata | null>();
 	private running = false;
 
 	private flush = debounce(() => void this.processQueue(), BATCH_DELAY_MS, true);
@@ -28,6 +31,14 @@ export default class UnlinkOnDeletePlugin extends Plugin {
 		// like a burst of deletions on startup.
 		this.app.workspace.onLayoutReady(() => {
 			this.registerEvent(this.app.vault.on("delete", (file) => this.enqueue(file)));
+			// A deleted note's own tags and links are gone by the time we scan, so
+			// keep the best-effort cache Obsidian hands over. The batch delay means
+			// this has landed before the queue is processed.
+			this.registerEvent(
+				this.app.metadataCache.on("deleted", (file, prevCache) => {
+					this.caches.set(file.path, prevCache);
+				}),
+			);
 		});
 	}
 
@@ -57,6 +68,8 @@ export default class UnlinkOnDeletePlugin extends Plugin {
 		}
 		const deleted = [...this.queue.values()];
 		this.queue.clear();
+		const caches = new Map(this.caches);
+		this.caches.clear();
 		if (deleted.length === 0) return;
 
 		this.running = true;
@@ -66,7 +79,7 @@ export default class UnlinkOnDeletePlugin extends Plugin {
 
 			let repoints: RepointChoices = new Map();
 			if (this.settings.confirmBeforeRewriting) {
-				const modal = new ConfirmCleanupModal(this.app, deleted, notes, this.settings);
+				const modal = new ConfirmCleanupModal(this.app, deleted, notes, this.settings, caches);
 				const decision = await modal.openAndAwait();
 				if (!decision.confirmed) return;
 				repoints = decision.repoints;
