@@ -1,6 +1,9 @@
 import { App, PluginSettingTab, Setting, moment } from "obsidian";
+import type { SettingDefinitionItem } from "obsidian";
 import type UnlinkOnDeletePlugin from "../main";
-import type { FrontmatterAction, RewriteMode } from "../settings";
+import type { FrontmatterAction, RewriteMode, UnlinkOnDeleteSettings } from "../settings";
+
+type SettingKey = keyof UnlinkOnDeleteSettings;
 
 export class UnlinkOnDeleteSettingTab extends PluginSettingTab {
 	constructor(
@@ -10,6 +13,125 @@ export class UnlinkOnDeleteSettingTab extends PluginSettingTab {
 		super(app, plugin);
 	}
 
+	/**
+	 * Declarative definitions, so the settings show up in Obsidian's settings
+	 * search on 1.13.0 and later. Older versions fall back to display() below.
+	 */
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		return [
+			{
+				name: "Clean up links on delete",
+				desc: "Rewrite links to a file as soon as that file is deleted.",
+				aliases: ["broken links", "unlink", "dangling"],
+				control: { type: "toggle", key: "enabled" satisfies SettingKey },
+			},
+			{
+				name: "Ask before rewriting",
+				desc: "Show the affected notes and wait for confirmation. Turn off to rewrite silently.",
+				aliases: ["confirm", "dialog", "prompt"],
+				control: { type: "toggle", key: "confirmBeforeRewriting" satisfies SettingKey },
+			},
+			{
+				type: "group",
+				heading: "Rewriting",
+				items: [
+					{
+						name: "What to leave behind",
+						desc: "How a link is rewritten once its target is gone.",
+						aliases: ["strikethrough", "plain text", "mode"],
+						control: {
+							type: "dropdown",
+							key: "mode" satisfies SettingKey,
+							options: {
+								unlink: "Plain text, keeping what the link displayed",
+								strike: "Struck through, with the date it was removed",
+							},
+						},
+					},
+					{
+						name: "Date format",
+						desc: "Moment.js format for the date written into the note. Only used by the struck-through option above.",
+						aliases: ["moment", "timestamp"],
+						control: {
+							type: "text",
+							key: "dateFormat" satisfies SettingKey,
+							placeholder: "YYYY-MM-DD",
+							validate: (value: string) =>
+								value.trim().length === 0 ? "Enter a date format." : undefined,
+						},
+					},
+				],
+			},
+			{
+				type: "group",
+				heading: "What to include",
+				items: [
+					{
+						name: "Embeds",
+						desc: "Embedded notes, images and attachments, written with a leading exclamation mark.",
+						aliases: ["transclusion", "attachment", "image"],
+						control: { type: "toggle", key: "handleEmbeds" satisfies SettingKey },
+					},
+					{
+						name: "Markdown links",
+						desc: "The other link style, written with parentheses instead of brackets.",
+						aliases: ["inline link"],
+						control: { type: "toggle", key: "handleMarkdownLinks" satisfies SettingKey },
+					},
+					{
+						name: "Properties",
+						desc: "Links stored in frontmatter, such as a related or project property.",
+						aliases: ["frontmatter", "yaml", "metadata"],
+						control: { type: "toggle", key: "handleFrontmatter" satisfies SettingKey },
+					},
+					{
+						name: "What to do with a property",
+						desc: "Applies when Properties is on. Properties are always left as plain text rather than markup, so the strikethrough option does not apply to them.",
+						aliases: ["frontmatter", "yaml"],
+						control: {
+							type: "dropdown",
+							key: "frontmatterAction" satisfies SettingKey,
+							options: {
+								unlink: "Keep the text without the brackets",
+								remove: "Drop the value from the property",
+							},
+						},
+					},
+				],
+			},
+			{
+				type: "group",
+				heading: "Exclusions",
+				items: [
+					{
+						name: "Folders to never rewrite",
+						desc: "One folder path per line. Notes inside them are listed but left untouched.",
+						aliases: ["ignore", "exclude", "templates"],
+						control: {
+							type: "textarea",
+							key: "excludedFolders" satisfies SettingKey,
+							placeholder: "templates\narchive",
+							rows: 4,
+						},
+					},
+				],
+			},
+		];
+	}
+
+	getControlValue(key: string): unknown {
+		return this.plugin.settings[key as SettingKey];
+	}
+
+	async setControlValue(key: string, value: unknown): Promise<void> {
+		Object.assign(this.plugin.settings, { [key]: value });
+		await this.plugin.saveSettings();
+	}
+
+	/**
+	 * Imperative fallback for Obsidian versions older than 1.13.0, which have no
+	 * declarative settings API. Newer versions never call this.
+	 */
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
