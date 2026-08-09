@@ -1,8 +1,26 @@
-/*
+.unlink-on-delete-list {
+	max-height: 40vh;
+	overflow-y: auto;
+	margin: var(--size-4-2) 0;
+	padding-left: var(--size-4-5);
+}
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+.unlink-on-delete-list li {
+	margin-bottom: var(--size-2-2);
+}
 
-If your plugin does not need CSS, delete this file.
+.unlink-on-delete-path {
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	word-break: break-all;
+}
 
-*/
+.unlink-on-delete-count {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.unlink-on-delete-hint {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}

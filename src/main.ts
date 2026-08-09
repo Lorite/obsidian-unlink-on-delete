@@ -1,114 +1,95 @@
-import {
-	Editor,
-	MarkdownView,
-	MarkdownFileInfo,
-	Modal,
-	Notice,
-	Plugin,
-} from 'obsidian';
-import {
-	DEFAULT_SETTINGS,
-	MyPluginSettings,
-	SampleSettingTab,
-} from './settings';
+import { Notice, Plugin, TAbstractFile, TFile, TFolder, debounce } from "obsidian";
+import { DEFAULT_SETTINGS, UnlinkOnDeleteSettings } from "./settings";
+import { findReferences } from "./core/scan";
+import { rewriteReferences } from "./core/rewrite";
+import { ConfirmCleanupModal } from "./ui/confirm-modal";
+import { UnlinkOnDeleteSettingTab } from "./ui/settings-tab";
 
-// Remember to rename these classes and interfaces!
+/**
+ * Deletions arrive one file at a time. Waiting a moment lets a multi-file delete
+ * settle into a single pass, and gives the metadata cache time to catch up.
+ */
+const BATCH_DELAY_MS = 400;
 
-export default class MyPlugin extends Plugin {
-	settings!: MyPluginSettings;
+export default class UnlinkOnDeletePlugin extends Plugin {
+	settings: UnlinkOnDeleteSettings = DEFAULT_SETTINGS;
 
-	async onload() {
+	private queue = new Map<string, TFile>();
+	private running = false;
+
+	private flush = debounce(() => void this.processQueue(), BATCH_DELAY_MS, true);
+
+	async onload(): Promise<void> {
 		await this.loadSettings();
+		this.addSettingTab(new UnlinkOnDeleteSettingTab(this.app, this));
 
-		// This creates an icon in the left ribbon.
-		this.addRibbonIcon('dice', 'Sample', (_evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
+		// Registered inside onLayoutReady so the initial vault index does not look
+		// like a burst of deletions on startup.
+		this.app.workspace.onLayoutReady(() => {
+			this.registerEvent(this.app.vault.on("delete", (file) => this.enqueue(file)));
 		});
-
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status bar text');
-
-		// This adds a simple command that can be triggered anywhere
-		this.addCommand({
-			id: 'open-modal-simple',
-			name: 'Open modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			},
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'replace-selected',
-			name: 'Replace selected content',
-			editorCallback: (
-				editor: Editor,
-				_ctx: MarkdownView | MarkdownFileInfo,
-			) => {
-				editor.replaceSelection('Sample editor command');
-			},
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-modal-complex',
-			name: 'Open modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView =
-					this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
-
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
-				return false;
-			},
-		});
-
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(activeDocument, 'click', (_evt: MouseEvent) => {
-			new Notice('Click');
-		});
-
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(
-			window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000),
-		);
 	}
 
-	onunload() {}
-
-	async loadSettings() {
-		this.settings = Object.assign(
-			{},
-			DEFAULT_SETTINGS,
-			(await this.loadData()) as Partial<MyPluginSettings>,
-		);
+	async loadSettings(): Promise<void> {
+		const stored = (await this.loadData()) as Partial<UnlinkOnDeleteSettings> | null;
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, stored ?? {});
 	}
 
-	async saveSettings() {
+	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
+	}
+
+	private enqueue(file: TAbstractFile): void {
+		if (!this.settings.enabled) return;
+
+		for (const deleted of collectFiles(file)) {
+			this.queue.set(deleted.path, deleted);
+		}
+		if (this.queue.size > 0) this.flush();
+	}
+
+	private async processQueue(): Promise<void> {
+		if (this.running) {
+			// Another batch is mid-flight. Come back once it is done.
+			this.flush();
+			return;
+		}
+		const deleted = [...this.queue.values()];
+		this.queue.clear();
+		if (deleted.length === 0) return;
+
+		this.running = true;
+		try {
+			const notes = findReferences(this.app, deleted, this.settings);
+			if (notes.length === 0) return;
+
+			if (this.settings.confirmBeforeRewriting) {
+				const modal = new ConfirmCleanupModal(this.app, deleted, notes, this.settings);
+				if (!(await modal.openAndAwait())) return;
+			}
+
+			const result = await rewriteReferences(this.app, notes, this.settings);
+			announce(result.notesChanged, result.referencesRewritten, result.referencesSkipped);
+		} catch (error) {
+			console.error("Unlink on delete: cleanup failed", error);
+			new Notice("Unlink on delete: cleanup failed, see the developer console.");
+		} finally {
+			this.running = false;
+		}
 	}
 }
 
-class SampleModal extends Modal {
-	onOpen() {
-		const { contentEl } = this;
-		contentEl.setText('Woah!');
-	}
+/** Expand a deleted folder into the files it contained. */
+function collectFiles(file: TAbstractFile): TFile[] {
+	if (file instanceof TFile) return [file];
+	if (file instanceof TFolder) return file.children.flatMap(collectFiles);
+	return [];
+}
 
-	onClose() {
-		const { contentEl } = this;
-		contentEl.empty();
-	}
+function announce(notes: number, rewritten: number, skipped: number): void {
+	if (rewritten === 0 && skipped === 0) return;
+	const noun = rewritten === 1 ? "link" : "links";
+	const where = notes === 1 ? "note" : "notes";
+	const tail = skipped > 0 ? `, ${skipped} left alone` : "";
+	new Notice(`Unlink on delete: cleaned ${rewritten} ${noun} in ${notes} ${where}${tail}.`);
 }

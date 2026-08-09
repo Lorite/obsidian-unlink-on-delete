@@ -13,6 +13,8 @@ export default defineConfig(
 		'package.json',
 		'package-lock.json',
 		'tsconfig.json',
+		// Unit tests run under node:test, where the Obsidian rules do not apply.
+		'test',
 	]),
 	{
 		languageOptions: {

@@ -1,38 +1,47 @@
-import { App, PluginSettingTab, Setting } from 'obsidian';
-import MyPlugin from './main';
+/** How a reference to a deleted file is rewritten in the note body. */
+export type RewriteMode = "unlink" | "strike";
 
-export interface MyPluginSettings {
-	mySetting: string;
+/** What to do with a reference stored in a frontmatter property. */
+export type FrontmatterAction = "unlink" | "remove";
+
+export interface UnlinkOnDeleteSettings {
+	/** Master switch. When off, deletions are ignored entirely. */
+	enabled: boolean;
+	mode: RewriteMode;
+	/** Moment.js format used by the strikethrough mode. */
+	dateFormat: string;
+	confirmBeforeRewriting: boolean;
+	handleEmbeds: boolean;
+	handleMarkdownLinks: boolean;
+	handleFrontmatter: boolean;
+	frontmatterAction: FrontmatterAction;
+	/** One folder path per line. Notes inside these folders are never rewritten. */
+	excludedFolders: string;
 }
 
-export const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default',
+export const DEFAULT_SETTINGS: UnlinkOnDeleteSettings = {
+	enabled: true,
+	mode: "unlink",
+	dateFormat: "YYYY-MM-DD",
+	confirmBeforeRewriting: true,
+	handleEmbeds: true,
+	handleMarkdownLinks: true,
+	handleFrontmatter: true,
+	frontmatterAction: "unlink",
+	excludedFolders: "",
 };
 
-export class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+/** Split the excluded folders setting into normalised, comparable prefixes. */
+export function excludedFolderList(settings: UnlinkOnDeleteSettings): string[] {
+	return settings.excludedFolders
+		.split("\n")
+		.map((line) => line.trim().replace(/^\/+|\/+$/g, ""))
+		.filter((line) => line.length > 0)
+		.map((line) => line.toLowerCase());
+}
 
-	constructor(app: App, plugin: MyPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
-
-	display(): void {
-		const { containerEl } = this;
-
-		containerEl.empty();
-
-		new Setting(containerEl)
-			.setName('Settings #1')
-			.setDesc("It's a secret")
-			.addText((text) =>
-				text
-					.setPlaceholder('Enter your secret')
-					.setValue(this.plugin.settings.mySetting)
-					.onChange(async (value) => {
-						this.plugin.settings.mySetting = value;
-						await this.plugin.saveSettings();
-					}),
-			);
-	}
+/** True when a note lives inside one of the excluded folders. */
+export function isExcluded(path: string, excluded: string[]): boolean {
+	const lower = path.toLowerCase();
+	return excluded.some((folder) => lower === folder || lower.startsWith(`${folder}/`));
 }

@@ -1,92 +1,90 @@
-# Obsidian Sample Plugin
+# Unlink on Delete
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+Obsidian updates every link to a note when you **rename** it. When you **delete** it, the links are left behind, pointing nowhere. This plugin closes that gap: delete a file and the links that pointed at it are cleaned up straight away.
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
-
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open modal (simple)" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and outputs a Notice on click.
-- Registers a global interval which logs 'setInterval' to the console.
-
-## First time developing plugins?
-
-Quick starting guide for new plugin devs:
-
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `src/main.ts` to `main.js`.
-- Make changes to `src/main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
-
-## Releasing new releases
-
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
-
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
-
-## Adding your plugin to the community plugin list
-
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
-
-## How to use
-
-- Clone this repo.
-- Make sure your NodeJS is at least v18 (`node --version`).
-- `npm i` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
-
-## Manually installing the plugin
-
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
-
-## Improve code quality with eslint
-
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code.
-- This project already has eslint preconfigured, you can invoke a check by running`npm run lint`
-- Together with a custom eslint [plugin](https://github.com/obsidianmd/eslint-plugin) for Obsidan specific code guidelines.
-- A GitHub action is preconfigured to automatically lint every commit on all branches.
-
-## Funding URL
-
-You can include funding URLs where people who use your plugin can financially support it.
-
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
-
-```json
-{
-	"fundingUrl": "https://buymeacoffee.com"
-}
+```
+Before:  See [[Old Paper Note]] for the ATE numbers.
+After:   See Old Paper Note for the ATE numbers.
 ```
 
-If you have multiple URLs, you can also do:
+## Why not a broken-link scanner
 
-```json
-{
-	"fundingUrl": {
-		"Buy Me a Coffee": "https://buymeacoffee.com",
-		"GitHub Sponsor": "https://github.com/sponsors",
-		"Patreon": "https://www.patreon.com/"
-	}
-}
+The other plugins in this space sweep the whole vault and strip everything that does not resolve. That is a different job, and it is destructive if you use unresolved links on purpose, as placeholders for notes you have not written yet. Many people do.
+
+This plugin only ever touches links pointing at the file you just deleted, and only after confirming that the link no longer resolves to anything else. A link to a note you never created is never touched.
+
+## What it does
+
+When a file is deleted, the plugin finds every reference to it and rewrites each one in place. Deleting a folder covers the files inside it, and deleting several files at once is handled as a single pass.
+
+By default it shows you what it is about to do first:
+
+```
+"Old Paper Note" deleted
+
+4 links in 3 notes now point nowhere:
+  tasks/Solve CLAWAR paper.md  (2)
+  media/research/Foo - bar2024.md  (1)
+  ai_chats/notes/Reading log.md  (1)
+
+[ Unlink them ]   [ Leave them ]
 ```
 
-## API Documentation
+### What it can clean up
 
-See https://docs.obsidian.md
+| Kind | Example | Default |
+| --- | --- | --- |
+| Wikilinks | `[[Foo]]`, `[[Foo\|bar]]`, `[[Foo#Heading]]` | always on |
+| Embeds | `![[Foo]]`, `![[diagram.png]]` | on |
+| Markdown links | `[bar](Foo.md)` | on |
+| Properties | `related: "[[Foo]]"`, `projects: ["[[Foo]]"]` | on |
+
+### What it leaves behind
+
+Two options, in settings:
+
+- **Plain text.** `[[Foo]]` becomes `Foo`, and `[[Foo|bar]]` becomes `bar`. The sentence still reads correctly and nothing is lost.
+- **Struck through and dated.** `[[Foo]]` becomes `~~Foo~~ (removed 2026-08-09)`, so the note carries a visible record that something was deleted. The date format is configurable.
+
+Properties are always left as plain text, since strikethrough is markup and would only be a literal string in YAML. You can instead have the value dropped from the property entirely.
+
+## Settings
+
+| Setting | Default | Notes |
+| --- | --- | --- |
+| Clean up links on delete | on | Master switch |
+| Ask before rewriting | on | Turn off to rewrite silently with a notice |
+| What to leave behind | Plain text | Plain text, or struck through and dated |
+| Date format | `YYYY-MM-DD` | Moment.js format, strikethrough mode only |
+| Embeds / Markdown links / Properties | on | Which reference kinds to include |
+| What to do with a property | Keep the text | Or drop the value from the property |
+| Folders to never rewrite | empty | One path per line, for templates and archives |
+
+## Safety
+
+This plugin edits your notes, and those edits are **not** undoable with Ctrl+Z, because they happen in files you do not have open. Before trusting it on a real vault:
+
+- Keep the confirmation dialog on until you are happy with what it does.
+- Use version control or Obsidian Sync version history, so a bad pass is recoverable.
+- Add `templates` (and anything else you would rather it never touched) to the excluded folders.
+
+Edits are applied through `Vault.process`, so they are atomic and safe on open notes, and each edit is verified against the text on disk before it is applied. Anything that no longer matches is reported as left alone rather than guessed at.
+
+## Installation
+
+Once it is in the community directory: **Settings → Community plugins → Browse**, search for *Unlink on Delete*.
+
+Manually, until then: download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/Lorite/obsidian-unlink-on-delete/releases/latest) into `<vault>/.obsidian/plugins/unlink-on-delete/`, then enable it under **Settings → Community plugins**.
+
+## Development
+
+```bash
+npm install
+npm run dev      # watch build
+npm run build    # type-check and production build
+npm run lint
+```
+
+## License
+
+MIT

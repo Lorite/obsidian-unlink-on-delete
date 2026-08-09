@@ -1,11 +1,10 @@
 {
-	"id": "sample-plugin",
-	"name": "Sample Plugin",
+	"id": "unlink-on-delete",
+	"name": "Unlink on Delete",
 	"version": "1.0.0",
-	"minAppVersion": "1.0.0",
-	"description": "Demonstrates some of the capabilities of the Obsidian API.",
-	"author": "Obsidian",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
+	"minAppVersion": "1.5.8",
+	"description": "When you delete a file, clean up the links that pointed to it instead of leaving them broken.",
+	"author": "Lorite",
+	"authorUrl": "https://github.com/Lorite",
 	"isDesktopOnly": false
 }
