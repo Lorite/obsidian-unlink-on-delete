@@ -101,6 +101,8 @@ This plugin edits your notes, and those edits are **not** undoable with Ctrl+Z, 
 
 Edits are applied through `Vault.process`, so they are atomic and safe on open notes, and each edit is verified against the text on disk before it is applied. Anything that no longer matches is reported as left alone rather than guessed at.
 
+One thing to know if you hand-write your YAML: property edits go through Obsidian's own `processFrontMatter`, which parses and rewrites the frontmatter block. Obsidian may normalise quoting or key order in the process, exactly as it does when you edit a property in the UI. Turn **Properties** off if you would rather your frontmatter were never touched.
+
 ## Installation
 
 Once it is in the community directory: **Settings → Community plugins → Browse**, search for *Unlink on Delete*.
