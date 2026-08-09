@@ -39,6 +39,22 @@ By default it shows you what it is about to do first:
 | Markdown links | `[bar](Foo.md)` | on |
 | Properties | `related: "[[Foo]]"`, `projects: ["[[Foo]]"]` | on |
 
+### Pointing the links somewhere else instead
+
+Sometimes a note is deleted because it was merged into another one, or replaced by a rewrite. For that, the dialog also lets you pick a note to **repoint** the links at, per deleted file. `[[Old Paper|that paper]]` becomes `[[New Paper|that paper]]`, keeping the alias you wrote and any `#heading` it pointed at, in whatever link style you have configured.
+
+Candidates are suggested and ranked, with the reason shown next to each:
+
+| Signal | Why it means something |
+| --- | --- |
+| Lists the deleted name as an alias | Obsidian writes alias links as `[[Real Name\|alias]]`, so a note claiming the old name usually absorbed it |
+| Same name in another folder | The note was moved, and Obsidian did not see it as a rename |
+| Similar name, same folder | Weak on its own, useful as a shortlist |
+
+The whole vault stays searchable, so a bad suggestion never boxes you in.
+
+**Suggestions are never applied on their own.** That is deliberate: a broken link is loud and stays visible until you fix it, while a link silently repointed at the wrong note looks correct forever. Ranking is only ever used to order a list a person chooses from.
+
 ### What it leaves behind
 
 Two options, in settings:
@@ -54,6 +70,7 @@ Properties are always left as plain text, since strikethrough is markup and woul
 | --- | --- | --- |
 | Clean up links on delete | on | Master switch |
 | Ask before rewriting | on | Turn off to rewrite silently with a notice |
+| Offer to repoint links | on | Adds the replacement-note picker to the dialog |
 | What to leave behind | Plain text | Plain text, or struck through and dated |
 | Date format | `YYYY-MM-DD` | Moment.js format, strikethrough mode only |
 | Embeds / Markdown links / Properties | on | Which reference kinds to include |

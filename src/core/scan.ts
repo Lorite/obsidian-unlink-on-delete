@@ -48,11 +48,14 @@ function collectFromCache(
 	const found: FoundReference[] = [];
 
 	const consider = (ref: Reference, kind: ReferenceKind, cacheItem?: ReferenceCache) => {
-		if (!pointsAtDeletedFile(app, ref.link, sourcePath, deleted, deletedPaths)) return;
+		const target = matchedTarget(app, ref.link, sourcePath, deleted, deletedPaths);
+		if (!target) return;
 		found.push({
 			kind,
 			original: ref.original,
+			link: ref.link,
 			displayText: displayTextOf(ref),
+			targetPath: target.path,
 			start: cacheItem?.position.start.offset,
 			end: cacheItem?.position.end.offset,
 			key: kind === "frontmatter" ? (ref as { key?: string }).key : undefined,
@@ -86,27 +89,27 @@ function displayTextOf(ref: Reference): string {
 }
 
 /**
- * Decide whether a link that was written in `sourcePath` referred to one of the
- * deleted files. Links that still resolve to a live file are always left alone.
+ * Which deleted file a link written in `sourcePath` referred to, or null.
+ * Links that still resolve to a live file are always left alone.
  */
-function pointsAtDeletedFile(
+function matchedTarget(
 	app: App,
 	linktext: string,
 	sourcePath: string,
 	deleted: TFile[],
 	deletedPaths: Set<string>,
-): boolean {
-	if (isExternalLink(linktext)) return false;
+): TFile | null {
+	if (isExternalLink(linktext)) return null;
 
 	const linkpath = getLinkpath(linktext);
-	if (linkpath.length === 0) return false;
+	if (linkpath.length === 0) return null;
 
 	const dest = app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath);
 	if (dest) {
 		// The cache can lag a beat behind the delete event, so a hit on a file we
 		// know is gone still counts. Anything else is a live file: leave it be.
-		return deletedPaths.has(dest.path.toLowerCase());
+		return deletedPaths.has(dest.path.toLowerCase()) ? dest : null;
 	}
 
-	return deleted.some((file) => linkpathMatches(linkpath, file));
+	return deleted.find((file) => linkpathMatches(linkpath, file)) ?? null;
 }

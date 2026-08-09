@@ -11,6 +11,8 @@ export interface UnlinkOnDeleteSettings {
 	/** Moment.js format used by the strikethrough mode. */
 	dateFormat: string;
 	confirmBeforeRewriting: boolean;
+	/** Offer to point the links at another note instead of cleaning them up. */
+	offerRepoint: boolean;
 	handleEmbeds: boolean;
 	handleMarkdownLinks: boolean;
 	handleFrontmatter: boolean;
@@ -24,6 +26,7 @@ export const DEFAULT_SETTINGS: UnlinkOnDeleteSettings = {
 	mode: "unlink",
 	dateFormat: "YYYY-MM-DD",
 	confirmBeforeRewriting: true,
+	offerRepoint: true,
 	handleEmbeds: true,
 	handleMarkdownLinks: true,
 	handleFrontmatter: true,

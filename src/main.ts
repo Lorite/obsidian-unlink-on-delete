@@ -1,4 +1,5 @@
 import { Notice, Plugin, TAbstractFile, TFile, TFolder, debounce } from "obsidian";
+import type { RepointChoices, RewriteResult } from "./types";
 import { DEFAULT_SETTINGS, UnlinkOnDeleteSettings } from "./settings";
 import { findReferences } from "./core/scan";
 import { rewriteReferences } from "./core/rewrite";
@@ -63,13 +64,16 @@ export default class UnlinkOnDeletePlugin extends Plugin {
 			const notes = findReferences(this.app, deleted, this.settings);
 			if (notes.length === 0) return;
 
+			let repoints: RepointChoices = new Map();
 			if (this.settings.confirmBeforeRewriting) {
 				const modal = new ConfirmCleanupModal(this.app, deleted, notes, this.settings);
-				if (!(await modal.openAndAwait())) return;
+				const decision = await modal.openAndAwait();
+				if (!decision.confirmed) return;
+				repoints = decision.repoints;
 			}
 
-			const result = await rewriteReferences(this.app, notes, this.settings);
-			announce(result.notesChanged, result.referencesRewritten, result.referencesSkipped);
+			const result = await rewriteReferences(this.app, notes, this.settings, repoints);
+			announce(result);
 		} catch (error) {
 			console.error("Unlink on delete: cleanup failed", error);
 			new Notice("Unlink on delete: cleanup failed, see the developer console.");
@@ -86,10 +90,17 @@ function collectFiles(file: TAbstractFile): TFile[] {
 	return [];
 }
 
-function announce(notes: number, rewritten: number, skipped: number): void {
-	if (rewritten === 0 && skipped === 0) return;
-	const noun = rewritten === 1 ? "link" : "links";
-	const where = notes === 1 ? "note" : "notes";
-	const tail = skipped > 0 ? `, ${skipped} left alone` : "";
-	new Notice(`Unlink on delete: cleaned ${rewritten} ${noun} in ${notes} ${where}${tail}.`);
+function announce(result: RewriteResult): void {
+	const { notesChanged, referencesRewritten, referencesSkipped, referencesRepointed } = result;
+	if (referencesRewritten === 0 && referencesSkipped === 0) return;
+
+	const cleaned = referencesRewritten - referencesRepointed;
+	const parts: string[] = [];
+	if (cleaned > 0) parts.push(`cleaned ${cleaned} ${cleaned === 1 ? "link" : "links"}`);
+	if (referencesRepointed > 0) parts.push(`repointed ${referencesRepointed}`);
+	if (parts.length === 0) parts.push("changed nothing");
+
+	const where = `${notesChanged} ${notesChanged === 1 ? "note" : "notes"}`;
+	const tail = referencesSkipped > 0 ? `, ${referencesSkipped} left alone` : "";
+	new Notice(`Unlink on delete: ${parts.join(", ")} in ${where}${tail}.`);
 }

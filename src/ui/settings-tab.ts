@@ -32,6 +32,12 @@ export class UnlinkOnDeleteSettingTab extends PluginSettingTab {
 				control: { type: "toggle", key: "confirmBeforeRewriting" satisfies SettingKey },
 			},
 			{
+				name: "Offer to repoint links",
+				desc: "Add a picker to the confirmation dialog for pointing the links at another note instead of cleaning them up. Needs the confirmation dialog.",
+				aliases: ["replace", "redirect", "merge", "moved"],
+				control: { type: "toggle", key: "offerRepoint" satisfies SettingKey },
+			},
+			{
 				type: "group",
 				heading: "Rewriting",
 				items: [
@@ -152,6 +158,18 @@ export class UnlinkOnDeleteSettingTab extends PluginSettingTab {
 			.addToggle((toggle) =>
 				toggle.setValue(this.plugin.settings.confirmBeforeRewriting).onChange(async (value) => {
 					this.plugin.settings.confirmBeforeRewriting = value;
+					await this.plugin.saveSettings();
+				}),
+			);
+
+		new Setting(containerEl)
+			.setName("Offer to repoint links")
+			.setDesc(
+				"Add a picker to the confirmation dialog for pointing the links at another note instead of cleaning them up. Needs the confirmation dialog.",
+			)
+			.addToggle((toggle) =>
+				toggle.setValue(this.plugin.settings.offerRepoint).onChange(async (value) => {
+					this.plugin.settings.offerRepoint = value;
 					await this.plugin.saveSettings();
 				}),
 			);

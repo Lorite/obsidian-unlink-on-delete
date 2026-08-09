@@ -6,7 +6,15 @@ import type { FoundReference } from "../src/types.ts";
 /** Build a reference positioned at the first occurrence of `original` in `text`. */
 function refIn(text: string, original: string, displayText: string): FoundReference {
 	const start = text.indexOf(original);
-	return { kind: "wikilink", original, displayText, start, end: start + original.length };
+	return {
+		kind: "wikilink",
+		original,
+		link: "Old Paper",
+		displayText,
+		targetPath: "Old Paper.md",
+		start,
+		end: start + original.length,
+	};
 }
 
 const unlink: (reference: FoundReference) => string = (reference) => reference.displayText;
@@ -33,14 +41,18 @@ describe("applyBodyEdits", () => {
 			{
 				kind: "wikilink" as const,
 				original: "[[Old Paper|it]]",
+				link: "Old Paper",
 				displayText: "it",
+				targetPath: "Old Paper.md",
 				start: text.indexOf("[[Old Paper|it]]"),
 				end: text.indexOf("[[Old Paper|it]]") + "[[Old Paper|it]]".length,
 			},
 			{
 				kind: "wikilink" as const,
 				original: "[[Old Paper#Results]]",
+				link: "Old Paper#Results",
 				displayText: "Old Paper > Results",
+				targetPath: "Old Paper.md",
 				start: text.indexOf("[[Old Paper#Results]]"),
 				end: text.indexOf("[[Old Paper#Results]]") + "[[Old Paper#Results]]".length,
 			},
@@ -64,7 +76,9 @@ describe("applyBodyEdits", () => {
 		const stale: FoundReference = {
 			kind: "wikilink",
 			original: "[[Old Paper]]",
+			link: "Old Paper",
 			displayText: "Old Paper",
+			targetPath: "Old Paper.md",
 			start: 4,
 			end: 17,
 		};
@@ -76,7 +90,13 @@ describe("applyBodyEdits", () => {
 
 	it("skips a reference with no offsets", () => {
 		const out = applyBodyEdits("text", [
-			{ kind: "frontmatter", original: "[[Old Paper]]", displayText: "Old Paper" },
+			{
+				kind: "frontmatter",
+				original: "[[Old Paper]]",
+				link: "Old Paper",
+				displayText: "Old Paper",
+				targetPath: "Old Paper.md",
+			},
 		], unlink);
 		assert.equal(out.skipped, 1);
 	});
@@ -87,7 +107,9 @@ describe("applyBodyEdits", () => {
 			{
 				kind: "embed",
 				original: "![[diagram.png]]",
+				link: "diagram.png",
 				displayText: "diagram.png",
+				targetPath: "assets/diagram.png",
 				start: text.indexOf("![["),
 				end: text.length,
 			},
